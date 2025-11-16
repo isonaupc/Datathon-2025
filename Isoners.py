@@ -135,8 +135,7 @@ def asymmetric_eval(preds, dataset):
 
 # ---------- 7. CV temporal i entrenament ----------
 # Fer servir GroupKFold per id_season per evitar filtració temporal
-groups = train_fe['id_season'].values
-# Ordenació temporal aproximada; GroupKFold com a solució simple
+groups = train_fe['id_season'].values # order seasons chronologically if possible; here GroupKFold as simple option 
 gkf = GroupKFold(n_splits=3)
 
 oof = np.zeros(len(X))
