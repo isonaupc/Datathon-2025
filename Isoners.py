@@ -134,45 +134,52 @@ def asymmetric_eval(preds, dataset):
     return 'asym_mse', loss, False
 
 # ---------- 7. CV temporal i entrenament ----------
-# Fer servir GroupKFold per id_season per evitar filtració temporal
+# Use GroupKFold on id_season to avoid leakage (train on earlier seasons) 
 groups = train_fe['id_season'].values # order seasons chronologically if possible; here GroupKFold as simple option 
 gkf = GroupKFold(n_splits=3)
+
+def lgb_custom_obj(y_true, y_pred):
+    resid = y_pred - y_true
+    w = np.where(resid < 0, alpha, 1.0)
+    grad = 2.0 * w * resid
+    hess = 2.0 * w
+    return grad, hess
+
+def lgb_custom_eval(y_true, y_pred):
+    resid = y_pred - y_true
+    w = np.where(resid < 0, alpha, 1.0)
+    loss = np.mean(w * (resid**2))
+    return "asym_mse", loss, False
 
 oof = np.zeros(len(X))
 preds_test = np.zeros(len(X_test))
 
-features = X.columns.tolist()
-lgb_params = {
-    'boosting_type':'gbdt',
-    'objective':'regression',
-    'metric':'None',  # farem servir l'avaluació personalitzada
-    'learning_rate':0.05,
-    'num_leaves':31,
-    'min_data_in_leaf':50,
-    'feature_fraction':0.8,
-    'bagging_fraction':0.8,
-    'bagging_freq':5,
-    'verbosity': -1,
-    'seed': 42
-}
-
 for fold, (tr_idx, val_idx) in enumerate(gkf.split(X, y, groups=groups)):
-    X_tr, X_val = X.iloc[tr_idx], X.iloc[val_idx]
-    y_tr, y_val = y[tr_idx], y[val_idx]
-    dtrain = lgb.Dataset(X_tr, label=y_tr)
-    dval   = lgb.Dataset(X_val, label=y_val)
-    model = lgb.train(
-        lgb_params,
-        dtrain,
-        num_boost_round=5000,
-        valid_sets=[dtrain, dval],
-        feval=asymmetric_eval,
-        fobj=asymmetric_squared_obj,
-        early_stopping_rounds=100,
-        verbose_eval=100
+
+    model = LGBMRegressor(
+        n_estimators=5000,
+        learning_rate=0.05,
+        num_leaves=31,
+        min_child_samples=50,
+        feature_fraction=0.8,
+        subsample=0.8,
+        subsample_freq=5,
+        objective=lgb_custom_obj,
+        random_state=42
     )
-    oof[val_idx] = model.predict(X_val, num_iteration=model.best_iteration)
-    preds_test += model.predict(X_test, num_iteration=model.best_iteration) / gkf.n_splits
+
+    model.fit(
+        X.iloc[tr_idx], y[tr_idx],
+        eval_set=[(X.iloc[val_idx], y[val_idx])],
+        eval_metric=lgb_custom_eval,
+        callbacks=[
+            early_stopping(stopping_rounds=100),
+            log_evaluation(100)
+        ]
+    )
+
+    oof[val_idx] = model.predict(X.iloc[val_idx])
+    preds_test += model.predict(X_test) / gkf.n_splits
 
 # ---------- 8. Post-processament simple ----------
 # Les prediccions han de ser no-negatives (i possiblement dins [0,1] si les dades estan escalades)
