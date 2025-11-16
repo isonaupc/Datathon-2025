@@ -3,8 +3,9 @@ import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 from sklearn.decomposition import PCA
 from sklearn.model_selection import GroupKFold
-from lightgbm import LGBMRegressor
 import lightgbm as lgb
+from lightgbm import LGBMRegressor
+from lightgbm import early_stopping, log_evaluation
 
 # ---------- 1. Carregar dades ----------
 train = pd.read_csv('train.csv', sep =';')
