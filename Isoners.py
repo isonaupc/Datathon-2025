@@ -9,7 +9,7 @@ import lightgbm as lgb
 # ---------- 1. Carregar dades ----------
 train = pd.read_csv('train.csv', sep =';')
 test  = pd.read_csv('test.csv', sep = ';')
-sample_sub = pd.read_csv(sep = ',')
+sample_sub = pd.read_csv('sample_submission.csv', sep = ',')
 
 # ---------- 2. Sumar variable a predir ----------
 # Com cada producte te varies files, aggregem weekly_demand per id
